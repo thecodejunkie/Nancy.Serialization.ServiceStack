@@ -94,6 +94,15 @@ Task("Compile")
   }
 });
 
+Task("Test")
+  .Description("Executes xUnit tests")
+  .WithCriteria(!skipTests)
+  .IsDependentOn("Compile")
+  .Does(() =>
+{
+  // No tests to run.
+});
+
 Task("Publish")
   .Description("Gathers output files and copies them to the output folder")
   .IsDependentOn("Compile")
@@ -124,13 +133,6 @@ Task("Package")
   Zip(outputBinaries, package, files);
 });
 
-Task("Nuke-Symbol-Packages")
-  .Description("Deletes symbol packages")
-  .Does(() =>
-{
-  DeleteFiles(GetFiles("./**/*.Symbols.nupkg"));
-});
-
 Task("Package-NuGet")
   .Description("Generates NuGet packages for each project that contains a nuspec")
   .Does(() =>
@@ -148,48 +150,40 @@ Task("Package-NuGet")
 });
 
 Task("Publish-NuGet")
-  .Description("Pushes the nuget packages in the nuget folder to a NuGet source. Also publishes the packages into the feeds.")
-  .Does(() =>
+    .Description("Pushes the nuget packages in the nuget folder to a NuGet source. Also publishes the packages into the feeds.")
+    .Does(() =>
 {
-  // Make sure we have an API key.
-  if(string.IsNullOrWhiteSpace(apiKey)){
-    throw new CakeException("No NuGet API key provided.");
-  }
+    if(string.IsNullOrWhiteSpace(apiKey)){
+        throw new CakeException("No NuGet API key provided.");
+    }
 
-  // Upload every package to the provided NuGet source (defaults to nuget.org).
-  var packages = GetFiles(outputNuGet.Path.FullPath + "/*" + version + ".nupkg");
-  foreach(var package in packages)
-  {
-    NuGetPush(package, new NuGetPushSettings {
-      Source = source,
-      ApiKey = apiKey
-    });
-  }
-});
+    var packages =
+        GetFiles(outputNuGet.Path.FullPath + "/*.nupkg") -
+        GetFiles(outputNuGet.Path.FullPath + "/*.symbols.nupkg");
 
-Task("Test")
-  .Description("Executes xUnit tests")
-  .WithCriteria(!skipTests)
-  .IsDependentOn("Compile")
-  .Does(() =>
-{
-  // No tests to run.
+    foreach(var package in packages)
+    {
+        NuGetPush(package, new NuGetPushSettings {
+            Source = source,
+            ApiKey = apiKey
+        });
+    }
 });
 
 ///////////////////////////////////////////////////////////////
 
 public string GetNancyVersion(FilePath filePath)
 {
-  var project = System.IO.File.ReadAllText(filePath.FullPath, Encoding.UTF8);
-  return System.Text.RegularExpressions.Regex.Match(project, "\"version\":\\s*\"(.+)\"").Groups[1].ToString();
+    var project = System.IO.File.ReadAllText(filePath.FullPath, Encoding.UTF8);
+    return System.Text.RegularExpressions.Regex.Match(project, "\"version\":\\s*\"(.+)\"").Groups[1].ToString();
 }
 
 Task("Default")
-  .IsDependentOn("Compile")
-  .IsDependentOn("Package-Nuget");
+    .IsDependentOn("Test")
+    .IsDependentOn("Package-NuGet");
 
 Task("Mono")
-  .IsDependentOn("Compile");
+    .IsDependentOn("Test");
 
 ///////////////////////////////////////////////////////////////
 
